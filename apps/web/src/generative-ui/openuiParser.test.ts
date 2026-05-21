@@ -39,6 +39,20 @@ describe("parseOpenUiProgram", () => {
     expect(program.statements.get("table")?.component).toBe("Table");
   });
 
+  it("parses richer visual component arguments", () => {
+    const program = parseOpenUiProgram(`
+      root = Widget("Reference", [hero, tip, code])
+      metric = Metric("Cards", "12", "violet", "brain")
+      hero = HeroSummary("Python review", "Fast recall for strings.", [metric], "violet", "study")
+      tip = Callout("Exam tip", "Use join() for large string assembly.", "amber", "idea")
+      code = CodeBlock("python", "result = ''.join(chunks)")
+    `);
+
+    expect(program.statements.get("hero")?.args[3]).toBe("violet");
+    expect(program.statements.get("tip")?.component).toBe("Callout");
+    expect(program.statements.get("code")?.args[1]).toBe("result = ''.join(chunks)");
+  });
+
   it("rejects programs without root", () => {
     expect(() => parseOpenUiProgram('text = Text("No root")')).toThrow(/root/);
   });
