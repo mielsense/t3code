@@ -39,6 +39,11 @@ import {
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import {
+  buildGenerativeUiProviderPrompt,
+  collectGenerateGroundingContexts,
+  parseGenerateCommand,
+} from "../generativeUiPrompt.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
@@ -766,9 +771,32 @@ const make = Effect.gen(function* () {
         ),
       );
 
+    const providerMessageText = yield* Effect.gen(function* () {
+      if (!parseGenerateCommand(message.text)) {
+        return message.text;
+      }
+
+      const project = yield* resolveProject(thread.projectId);
+      const generationCwd =
+        resolveThreadWorkspaceCwd({
+          thread,
+          projects: project ? [project] : [],
+        }) ?? process.cwd();
+      const groundingContexts = yield* Effect.promise(() =>
+        collectGenerateGroundingContexts({
+          text: message.text,
+          cwd: generationCwd,
+        }),
+      );
+
+      return buildGenerativeUiProviderPrompt(message.text, {
+        groundingContexts,
+      });
+    });
+
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
-      messageText: message.text,
+      messageText: providerMessageText,
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
       ...(event.payload.modelSelection !== undefined
         ? { modelSelection: event.payload.modelSelection }

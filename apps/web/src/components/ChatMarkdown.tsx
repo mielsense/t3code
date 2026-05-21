@@ -35,6 +35,7 @@ import {
 } from "../markdown-links";
 import { readLocalApi } from "../localApi";
 import { cn } from "../lib/utils";
+import { InlineGenerativeUi } from "../generative-ui/InlineGenerativeUi";
 
 class CodeHighlightErrorBoundary extends React.Component<
   { fallback: ReactNode; children: ReactNode },
@@ -584,6 +585,9 @@ function ChatMarkdown({
         const codeBlock = extractCodeBlock(children);
         if (!codeBlock) {
           return <pre {...props}>{children}</pre>;
+        }
+        if (extractFenceLanguage(codeBlock.className) === "openui") {
+          return <InlineGenerativeUi source={codeBlock.code} />;
         }
 
         return (
