@@ -4,7 +4,7 @@ import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import type { OpenUiValue } from "./openuiParser";
 import { GeneratedIcon, toneStyles } from "./icons";
-import type { GeneratedComponentProps, GenerativeUiTone } from "./renderingTypes";
+import type { GeneratedComponentProps, GenerativeUiTone, RenderContext } from "./renderingTypes";
 import {
   asNumber,
   asString,
@@ -236,7 +236,7 @@ export function GeneratedTab({ call, context, renderChildren }: GeneratedCompone
 export function GeneratedFlashcards({ call, context, renderValue }: GeneratedComponentProps) {
   const values = Array.isArray(call.args[0]) ? call.args[0] : [];
   return (
-    <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
+    <div className="space-y-3">
       {values.map((card, index) => (
         <div key={keyForValue(card, index)} className="min-w-0">
           {renderValue(card, context)}
@@ -254,15 +254,20 @@ export function GeneratedFlashcard({ call }: GeneratedComponentProps) {
     <button
       type="button"
       onClick={() => setFlipped((value) => !value)}
-      className="group flex h-full min-h-32 w-full flex-col rounded-lg border border-border/70 bg-background/55 p-4 text-left text-sm transition hover:border-border hover:shadow-sm hover:shadow-black/10"
+      className="group w-full rounded-lg border border-border/70 bg-background/55 p-4 text-left text-sm transition hover:border-border hover:bg-background/70"
     >
-      <span className="flex items-center gap-2 text-muted-foreground text-xs">
+      <span className="flex items-center gap-2 font-semibold text-base leading-tight">
         <GeneratedIcon className="size-3.5" name={icon} tone={tone} />
-        {flipped ? "Back" : "Front"}
+        {asString(call.args[0])}
       </span>
-      <span className="mt-3 block text-base leading-relaxed">
-        {flipped ? asString(call.args[1]) : asString(call.args[0])}
+      <span className="mt-2 block text-muted-foreground text-xs">
+        {flipped ? "definition revealed" : "click to reveal definition"}
       </span>
+      {flipped ? (
+        <span className="mt-3 block border-border/70 border-t pt-3 text-muted-foreground leading-relaxed">
+          {asString(call.args[1])}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -431,51 +436,99 @@ export function GeneratedProgress({ call }: GeneratedComponentProps) {
   );
 }
 
-export function GeneratedStudyDeck({ call, context, renderValue }: GeneratedComponentProps) {
-  const cards = call.args[2];
-  const count = Array.isArray(cards) ? cards.length : 0;
+function resolvedComponents(
+  values: OpenUiValue | undefined,
+  context: RenderContext,
+  component: string,
+): OpenUiValue[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values.filter((value) => resolveCall(value, context)?.component === component);
+}
+
+export function GeneratedStudyDeck({
+  call,
+  context,
+  renderChildren,
+  renderValue,
+}: GeneratedComponentProps) {
+  const maybeSections = call.args[2];
+  const sections = resolvedComponents(maybeSections, context, "Tab");
+  const usesSectionedDeck = sections.length > 0;
+  const cards = usesSectionedDeck ? call.args[3] : call.args[2];
+  const quizzes = usesSectionedDeck ? call.args[4] : call.args[3];
+  const cardCount = Array.isArray(cards) ? cards.length : 0;
+  const quizCount = Array.isArray(quizzes) ? quizzes.length : 0;
+  const fallbackOverview: OpenUiValue = {
+    type: "call",
+    component: "Tab",
+    args: [
+      "Overview",
+      [
+        {
+          type: "call",
+          component: "Text",
+          args: [asString(call.args[1]), "body"],
+        },
+      ],
+      "book",
+      "emerald",
+    ],
+  };
+  const recallTabs: OpenUiValue[] = [
+    ...(cardCount > 0
+      ? [
+          {
+            type: "call" as const,
+            component: "Tab",
+            args: [
+              "Flashcards",
+              [
+                {
+                  type: "call" as const,
+                  component: "Flashcards",
+                  args: [cards ?? []],
+                },
+              ],
+              "brain",
+              "violet",
+            ],
+          },
+        ]
+      : []),
+    ...(quizCount > 0
+      ? [
+          {
+            type: "call" as const,
+            component: "Tab",
+            args: ["Quiz", quizzes ?? [], "question", "cyan"],
+          },
+        ]
+      : []),
+  ];
+  const tabs = [...(usesSectionedDeck ? sections : [fallbackOverview]), ...recallTabs];
   return (
     <section className="space-y-4">
-      <GeneratedHeroSummary
-        call={{
-          type: "call",
-          component: "HeroSummary",
-          args: [
-            asString(call.args[0], "Study deck"),
-            asString(call.args[1]),
-            [
-              {
-                type: "call",
-                component: "Metric",
-                args: ["Cards", String(count), "violet", "brain"],
-              },
-            ],
-            "violet",
-            "study",
-          ],
-        }}
+      <header className="rounded-lg border border-border/70 bg-background/45 px-4 py-3">
+        <div className="flex items-start gap-2.5">
+          <GeneratedIcon className="mt-0.5" name="study" tone="emerald" />
+          <div className="min-w-0">
+            <h3 className="font-semibold text-base leading-tight">
+              {asString(call.args[0], "Study deck")}
+            </h3>
+            <p className="mt-1 text-muted-foreground text-sm leading-relaxed">
+              {asString(call.args[1])}
+            </p>
+          </div>
+        </div>
+      </header>
+      <GeneratedTabs
+        call={{ type: "call", component: "Tabs", args: [tabs] }}
         context={context}
-        renderChildren={(value, nextContext) => {
-          if (!Array.isArray(value)) return null;
-          return value.map((entry, index) => (
-            <span key={keyForValue(entry, index)}>{renderValue(entry, nextContext)}</span>
-          ));
-        }}
+        renderChildren={renderChildren}
         renderValue={renderValue}
       />
-      <GeneratedFlashcards
-        call={{ type: "call", component: "Flashcards", args: [cards ?? []] }}
-        context={context}
-        renderChildren={() => null}
-        renderValue={renderValue}
-      />
-      <div className="space-y-3">
-        {Array.isArray(call.args[3])
-          ? call.args[3].map((entry, index) => (
-              <div key={keyForValue(entry, index)}>{renderValue(entry, context)}</div>
-            ))
-          : null}
-      </div>
     </section>
   );
 }

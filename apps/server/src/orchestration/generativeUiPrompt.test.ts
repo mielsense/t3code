@@ -59,6 +59,36 @@ describe("buildGenerativeUiProviderPrompt", () => {
     expect(prompt).toContain("Python lists are mutable.");
     expect(prompt).toContain("Do not use placeholders");
   });
+
+  it("instructs study guides to prioritize study content before recall tools", () => {
+    const prompt = buildGenerativeUiProviderPrompt("/generate python study guide");
+
+    expect(prompt).toContain("Study guide / exam prep / learn-this");
+    expect(prompt).toContain("For study guides, make the default surface actual study content");
+    expect(prompt).toContain(
+      "Flashcards and Quiz should be separate tabs after the study content tabs",
+    );
+    expect(prompt).toContain(
+      "StudyDeck(title: string, summary: string, sections: Tab[], cards: Flashcard[], quiz: Quiz[])",
+    );
+    expect(prompt).toContain("Use 3 or 4 study tabs at most");
+    expect(prompt).toContain("Every CodeBlock must be preceded by Text or Callout");
+  });
+
+  it("instructs cheat sheets and references not to add recall tools unless requested", () => {
+    const prompt = buildGenerativeUiProviderPrompt(
+      "/generate a Git workflow cheat sheet comparing merge, rebase, cherry-pick, and stash",
+    );
+
+    expect(prompt).toContain("Cheat sheet / reference / comparison");
+    expect(prompt).toContain(
+      "Do not include Flashcard or Quiz unless the user explicitly asks for flashcards, quiz, self-test, exam drill, memorization, recall, or practice questions.",
+    );
+    expect(prompt).toContain(
+      "For cheat sheets, references, and comparisons, prefer Tabs, Table, Card, List, CodeBlock, and Callout.",
+    );
+    expect(prompt).toContain('root = Widget("Git workflow cheat sheet", [status, summary, tabs])');
+  });
 });
 
 describe("collectGenerateFileContexts", () => {
