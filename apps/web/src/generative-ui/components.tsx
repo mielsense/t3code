@@ -11,6 +11,7 @@ import {
   asStringArray,
   asTone,
   keyForValue,
+  resolveArray,
   resolveCall,
 } from "./renderingUtils";
 
@@ -190,7 +191,7 @@ export function GeneratedTable({ call }: GeneratedComponentProps) {
 }
 
 export function GeneratedTabs({ call, context, renderValue }: GeneratedComponentProps) {
-  const tabs = Array.isArray(call.args[0]) ? call.args[0] : [];
+  const tabs = resolveArray(call.args[0], context);
   const [activeIndex, setActiveIndex] = useState(0);
   const active = tabs[activeIndex];
   return (
@@ -234,7 +235,7 @@ export function GeneratedTab({ call, context, renderChildren }: GeneratedCompone
 }
 
 export function GeneratedFlashcards({ call, context, renderValue }: GeneratedComponentProps) {
-  const values = Array.isArray(call.args[0]) ? call.args[0] : [];
+  const values = resolveArray(call.args[0], context);
   return (
     <div className="space-y-3">
       {values.map((card, index) => (
@@ -309,28 +310,6 @@ export function GeneratedQuiz({ call }: GeneratedComponentProps) {
             </button>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-export function GeneratedWeather({ call }: GeneratedComponentProps) {
-  return (
-    <div className="rounded-lg border border-border/70 bg-background/55 p-4">
-      <div className="flex items-center gap-2 text-muted-foreground text-sm">
-        <GeneratedIcon name="weather" tone="cyan" />
-        {asString(call.args[0])}
-      </div>
-      <div className="mt-2 flex items-baseline gap-2">
-        <span className="font-semibold text-3xl">{asString(call.args[1])}</span>
-        <span className="text-sm">{asString(call.args[2])}</span>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {asStringArray(call.args[3]).map((detail) => (
-          <Badge key={detail} className={toneStyles.cyan.chip} variant="outline">
-            {detail}
-          </Badge>
-        ))}
       </div>
     </div>
   );
@@ -441,10 +420,163 @@ function resolvedComponents(
   context: RenderContext,
   component: string,
 ): OpenUiValue[] {
-  if (!Array.isArray(values)) {
-    return [];
-  }
-  return values.filter((value) => resolveCall(value, context)?.component === component);
+  return resolveArray(values, context).filter(
+    (value) => resolveCall(value, context)?.component === component,
+  );
+}
+
+function hasRenderableValue(value: OpenUiValue | undefined): value is OpenUiValue {
+  return value !== undefined;
+}
+
+function GeneratedIntentHeader({
+  icon,
+  summary,
+  title,
+  tone,
+}: {
+  icon: string;
+  summary: string;
+  title: string;
+  tone: GenerativeUiTone;
+}) {
+  return (
+    <header className="rounded-lg border border-border/70 bg-background/45 px-4 py-3">
+      <div className="flex items-start gap-2.5">
+        <GeneratedIcon className="mt-0.5" name={icon} tone={tone} />
+        <div className="min-w-0">
+          <h3 className="font-semibold text-base leading-tight">{title}</h3>
+          {summary ? (
+            <p className="mt-1 text-muted-foreground text-sm leading-relaxed">{summary}</p>
+          ) : null}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function GeneratedSectionedIntent({
+  call,
+  context,
+  icon,
+  renderChildren,
+  renderValue,
+  tone,
+}: GeneratedComponentProps & { icon: string; tone: GenerativeUiTone }) {
+  const sections = call.args[2];
+  const tabSections = resolvedComponents(sections, context, "Tab");
+  return (
+    <section className="space-y-4">
+      <GeneratedIntentHeader
+        icon={icon}
+        summary={asString(call.args[1])}
+        title={asString(call.args[0], "Generated UI")}
+        tone={tone}
+      />
+      {tabSections.length > 0 ? (
+        <GeneratedTabs
+          call={{ type: "call", component: "Tabs", args: [tabSections] }}
+          context={context}
+          renderChildren={renderChildren}
+          renderValue={renderValue}
+        />
+      ) : (
+        <div className="space-y-3">{renderChildren(sections, context)}</div>
+      )}
+    </section>
+  );
+}
+
+export function GeneratedReferenceUi(props: GeneratedComponentProps) {
+  return <GeneratedSectionedIntent {...props} icon="book" tone="emerald" />;
+}
+
+export function GeneratedStudyUi(props: GeneratedComponentProps) {
+  return <GeneratedStudyDeck {...props} />;
+}
+
+export function GeneratedDashboardUi({ call, context, renderChildren }: GeneratedComponentProps) {
+  return (
+    <section className="space-y-4">
+      <GeneratedIntentHeader
+        icon="activity"
+        summary={asString(call.args[1])}
+        title={asString(call.args[0], "Dashboard")}
+        tone="cyan"
+      />
+      <GeneratedStatGrid
+        call={{ type: "call", component: "StatGrid", args: [call.args[2] ?? []] }}
+        context={context}
+        renderChildren={renderChildren}
+        renderValue={() => null}
+      />
+      <div className="space-y-3">{renderChildren(call.args[3], context)}</div>
+    </section>
+  );
+}
+
+export function GeneratedRunbookUi({ call, context, renderChildren }: GeneratedComponentProps) {
+  return (
+    <section className="space-y-4">
+      <GeneratedIntentHeader
+        icon="list"
+        summary={asString(call.args[1])}
+        title={asString(call.args[0], "Runbook")}
+        tone="amber"
+      />
+      <GeneratedTimeline
+        call={{ type: "call", component: "Timeline", args: [call.args[2] ?? []] }}
+        context={context}
+        renderChildren={renderChildren}
+        renderValue={() => null}
+      />
+      <div className="space-y-3">{renderChildren(call.args[3], context)}</div>
+    </section>
+  );
+}
+
+export function GeneratedComparisonUi({
+  call,
+  context,
+  renderChildren,
+  renderValue,
+}: GeneratedComponentProps) {
+  return (
+    <section className="space-y-4">
+      <GeneratedIntentHeader
+        icon="layers"
+        summary={asString(call.args[1])}
+        title={asString(call.args[0], "Comparison")}
+        tone="blue"
+      />
+      {hasRenderableValue(call.args[2]) ? renderValue(call.args[2], context) : null}
+      <div className="space-y-3">{renderChildren(call.args[3], context)}</div>
+    </section>
+  );
+}
+
+export function GeneratedInspectorUi(props: GeneratedComponentProps) {
+  return <GeneratedSectionedIntent {...props} icon="file" tone="violet" />;
+}
+
+export function GeneratedPlannerUi({ call, context, renderChildren }: GeneratedComponentProps) {
+  return (
+    <section className="space-y-4">
+      <GeneratedIntentHeader
+        icon="target"
+        summary={asString(call.args[1])}
+        title={asString(call.args[0], "Plan")}
+        tone="emerald"
+      />
+      <GeneratedTimeline
+        call={{ type: "call", component: "Timeline", args: [call.args[2] ?? []] }}
+        context={context}
+        renderChildren={renderChildren}
+        renderValue={() => null}
+      />
+      <div className="space-y-3">{renderChildren(call.args[3], context)}</div>
+    </section>
+  );
 }
 
 export function GeneratedStudyDeck({
@@ -458,8 +590,10 @@ export function GeneratedStudyDeck({
   const usesSectionedDeck = sections.length > 0;
   const cards = usesSectionedDeck ? call.args[3] : call.args[2];
   const quizzes = usesSectionedDeck ? call.args[4] : call.args[3];
-  const cardCount = Array.isArray(cards) ? cards.length : 0;
-  const quizCount = Array.isArray(quizzes) ? quizzes.length : 0;
+  const cardValues = resolveArray(cards, context);
+  const quizValues = resolveArray(quizzes, context);
+  const cardCount = cardValues.length;
+  const quizCount = quizValues.length;
   const fallbackOverview: OpenUiValue = {
     type: "call",
     component: "Tab",
@@ -510,19 +644,12 @@ export function GeneratedStudyDeck({
   const tabs = [...(usesSectionedDeck ? sections : [fallbackOverview]), ...recallTabs];
   return (
     <section className="space-y-4">
-      <header className="rounded-lg border border-border/70 bg-background/45 px-4 py-3">
-        <div className="flex items-start gap-2.5">
-          <GeneratedIcon className="mt-0.5" name="study" tone="emerald" />
-          <div className="min-w-0">
-            <h3 className="font-semibold text-base leading-tight">
-              {asString(call.args[0], "Study deck")}
-            </h3>
-            <p className="mt-1 text-muted-foreground text-sm leading-relaxed">
-              {asString(call.args[1])}
-            </p>
-          </div>
-        </div>
-      </header>
+      <GeneratedIntentHeader
+        icon="study"
+        summary={asString(call.args[1])}
+        title={asString(call.args[0], "Study deck")}
+        tone="emerald"
+      />
       <GeneratedTabs
         call={{ type: "call", component: "Tabs", args: [tabs] }}
         context={context}

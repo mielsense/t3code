@@ -10,27 +10,13 @@ import {
   parseGenerateCommand,
 } from "./generativeUiPrompt.ts";
 
-const githubUserFetchMock = async (url: string | URL | Request) => {
-  const href = String(url);
-  if (href.includes("/users/mielsense/events")) {
-    return Response.json([{ type: "PushEvent", repo: { name: "mielsense/demo" } }]);
-  }
-  if (href.includes("/users/mielsense/repos")) {
-    return Response.json([{ name: "demo", pushed_at: "2026-05-21T00:00:00Z" }]);
-  }
-  if (href.includes("/users/mielsense")) {
-    return Response.json({ login: "mielsense", public_repos: 12 });
-  }
-  return new Response("Not found", { status: 404 });
-};
-
 describe("parseGenerateCommand", () => {
   it("parses slash generate prompts", () => {
     expect(parseGenerateCommand("/generate make flashcards")?.prompt).toBe("make flashcards");
   });
 
   it("parses mention-style generate prompts", () => {
-    expect(parseGenerateCommand(" @generate weather widget ")?.prompt).toBe("weather widget");
+    expect(parseGenerateCommand(" @generate status widget ")?.prompt).toBe("status widget");
   });
 
   it("ignores normal messages", () => {
@@ -40,10 +26,11 @@ describe("parseGenerateCommand", () => {
 
 describe("buildGenerativeUiProviderPrompt", () => {
   it("wraps generate requests with UI-only instructions", () => {
-    const prompt = buildGenerativeUiProviderPrompt("/generate make a weather widget");
+    const prompt = buildGenerativeUiProviderPrompt("/generate make a status widget");
     expect(prompt).toContain("UI-only response mode");
     expect(prompt).toContain("```openui");
-    expect(prompt).toContain("make a weather widget");
+    expect(prompt).toContain("make a status widget");
+    expect(prompt).toContain("External fetches are disabled");
   });
 
   it("leaves normal requests unchanged", () => {
@@ -58,6 +45,22 @@ describe("buildGenerativeUiProviderPrompt", () => {
     });
     expect(prompt).toContain("Python lists are mutable.");
     expect(prompt).toContain("Do not use placeholders");
+    expect(prompt).toContain("Grounding status to render visibly in the UI:");
+    expect(prompt).toContain("- file:/tmp/notes.txt: loaded");
+    expect(prompt).toContain("Include SourceStatus only when local file context is present");
+  });
+
+  it("does not force source status for stable knowledge requests without sources", () => {
+    const prompt = buildGenerativeUiProviderPrompt(
+      "/generate a Git workflow cheat sheet comparing merge, rebase, cherry-pick, and stash",
+    );
+
+    expect(prompt).toContain("Grounding context:");
+    expect(prompt).toContain(
+      "No grounding context was supplied. For stable general-knowledge requests, do not mention missing grounding and do not add a Sources tab or SourceStatus.",
+    );
+    expect(prompt).not.toContain("none: failed");
+    expect(prompt).not.toContain("Include SourceStatus as the first or second child");
   });
 
   it("instructs study guides to prioritize study content before recall tools", () => {
@@ -80,6 +83,22 @@ describe("buildGenerativeUiProviderPrompt", () => {
       "/generate a Git workflow cheat sheet comparing merge, rebase, cherry-pick, and stash",
     );
 
+    expect(prompt).toContain(
+      "ReferenceUi(title: string, summary: string, sections: Tab[] | Component[])",
+    );
+    expect(prompt).toContain(
+      "DashboardUi(title: string, summary: string, metrics: Metric[], content: Component[])",
+    );
+    expect(prompt).toContain(
+      "RunbookUi(title: string, summary: string, steps: TimelineItem[], content: Component[])",
+    );
+    expect(prompt).toContain(
+      "ComparisonUi(title: string, summary: string, table: Table, content?: Component[])",
+    );
+    expect(prompt).toContain("InspectorUi(title: string, summary: string, content: Component[])");
+    expect(prompt).toContain(
+      "PlannerUi(title: string, summary: string, timeline: TimelineItem[], progress: Progress[])",
+    );
     expect(prompt).toContain("Cheat sheet / reference / comparison");
     expect(prompt).toContain(
       "Do not include Flashcard or Quiz unless the user explicitly asks for flashcards, quiz, self-test, exam drill, memorization, recall, or practice questions.",
@@ -87,7 +106,8 @@ describe("buildGenerativeUiProviderPrompt", () => {
     expect(prompt).toContain(
       "For cheat sheets, references, and comparisons, prefer Tabs, Table, Card, List, CodeBlock, and Callout.",
     );
-    expect(prompt).toContain('root = Widget("Git workflow cheat sheet", [status, summary, tabs])');
+    expect(prompt).toContain('root = ReferenceUi("Git workflow cheat sheet"');
+    expect(prompt).not.toContain('sources = Tab("Sources"');
   });
 });
 
@@ -108,25 +128,21 @@ describe("collectGenerateFileContexts", () => {
 });
 
 describe("collectGenerateGroundingContexts", () => {
-  it("loads GitHub user context for GitHub generate requests", async () => {
+  it("does not fetch GitHub context for GitHub generate requests", async () => {
     const contexts = await collectGenerateGroundingContexts({
       text: "/generate github commit dashboard for mielsense",
       cwd: process.cwd(),
-      fetchImpl: githubUserFetchMock as typeof fetch,
     });
 
-    expect(contexts.find((context) => context.source === "github")?.content).toContain("PushEvent");
+    expect(contexts).toEqual([]);
   });
 
-  it("records failed weather context instead of omitting it", async () => {
+  it("does not fetch URL context for remote generate requests", async () => {
     const contexts = await collectGenerateGroundingContexts({
-      text: "/generate weather for Atlantis",
+      text: "/generate dashboard from https://example.com/status",
       cwd: process.cwd(),
-      fetchImpl: (async () => new Response("Nope", { status: 500 })) as unknown as typeof fetch,
     });
 
-    expect(contexts).toContainEqual(
-      expect.objectContaining({ source: "weather", status: "failed" }),
-    );
+    expect(contexts).toEqual([]);
   });
 });

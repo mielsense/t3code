@@ -13,7 +13,7 @@ export interface OpenUiCall {
 }
 
 export interface OpenUiProgram {
-  statements: Map<string, OpenUiCall>;
+  statements: Map<string, OpenUiValue>;
   root: OpenUiCall;
 }
 
@@ -28,7 +28,7 @@ const IDENTIFIER_PATTERN = /[A-Za-z_][A-Za-z0-9_]*/y;
 const NUMBER_PATTERN = /-?(?:0|[1-9]\d*)(?:\.\d+)?/y;
 
 export function parseOpenUiProgram(source: string): OpenUiProgram {
-  const statements = new Map<string, OpenUiCall>();
+  const statements = new Map<string, OpenUiValue>();
   for (const statement of splitOpenUiStatements(source)) {
     const equalIndex = statement.indexOf("=");
     if (equalIndex <= 0) {
@@ -41,14 +41,11 @@ export function parseOpenUiProgram(source: string): OpenUiProgram {
     const parser = new Parser(tokenize(statement.slice(equalIndex + 1)));
     const value = parser.parseValue();
     parser.expectEnd();
-    if (typeof value !== "object" || Array.isArray(value) || value.type !== "call") {
-      throw new Error(`OpenUI statement '${name}' must be a component call.`);
-    }
     statements.set(name, value);
   }
 
   const root = statements.get("root");
-  if (!root) {
+  if (!root || typeof root !== "object" || Array.isArray(root) || root.type !== "call") {
     throw new Error("OpenUI program must define root.");
   }
   return { statements, root };

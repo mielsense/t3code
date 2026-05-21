@@ -30,10 +30,42 @@ export function asStringArray(value: OpenUiValue | undefined): string[] {
     : [];
 }
 
+export function resolveValue(value: OpenUiValue, context: RenderContext): OpenUiValue {
+  if (typeof value !== "object" || Array.isArray(value) || value.type !== "ref") {
+    return value;
+  }
+  if (context.seen.has(value.name)) {
+    return value;
+  }
+  return context.program.statements.get(value.name) ?? value;
+}
+
 export function resolveCall(value: OpenUiValue, context: RenderContext): OpenUiCall | null {
-  if (typeof value !== "object" || Array.isArray(value)) return null;
-  if (value.type === "call") return value;
-  return context.program.statements.get(value.name) ?? null;
+  const resolved = resolveValue(value, context);
+  if (typeof resolved !== "object" || Array.isArray(resolved)) return null;
+  if (resolved.type === "call") return resolved;
+  return null;
+}
+
+export function resolveArray(
+  value: OpenUiValue | undefined,
+  context: RenderContext,
+): OpenUiValue[] {
+  if (value === undefined) {
+    return [];
+  }
+  const resolved = resolveValue(value, context);
+  return Array.isArray(resolved) ? resolved : [];
+}
+
+export function resolveCallArray(
+  value: OpenUiValue | undefined,
+  context: RenderContext,
+): OpenUiCall[] {
+  return resolveArray(value, context).flatMap((entry) => {
+    const call = resolveCall(entry, context);
+    return call ? [call] : [];
+  });
 }
 
 export function keyForValue(value: OpenUiValue, fallback: number): string {

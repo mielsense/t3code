@@ -6,7 +6,6 @@ import {
   BrainIcon,
   CheckCircle2Icon,
   CircleHelpIcon,
-  CloudSunIcon,
   Code2Icon,
   DatabaseIcon,
   FileTextIcon,
@@ -46,7 +45,6 @@ const ICONS: Record<string, LucideIcon> = {
   study: BookOpenCheckIcon,
   target: TargetIcon,
   trophy: TrophyIcon,
-  weather: CloudSunIcon,
   x: XCircleIcon,
   zap: ZapIcon,
 };

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseOpenUiProgram } from "./openuiParser";
+import { parseOpenUiProgram, type OpenUiCall, type OpenUiValue } from "./openuiParser";
+
+function expectCall(value: OpenUiValue | undefined): OpenUiCall {
+  expect(value).toMatchObject({ type: "call" });
+  return value as OpenUiCall;
+}
 
 describe("parseOpenUiProgram", () => {
   it("parses root and referenced components", () => {
@@ -11,7 +16,7 @@ describe("parseOpenUiProgram", () => {
     `);
 
     expect(program.root.component).toBe("Widget");
-    expect(program.statements.get("card1")?.args).toEqual(["Q", "A"]);
+    expect(expectCall(program.statements.get("card1")).args).toEqual(["Q", "A"]);
   });
 
   it("parses multiline calls and nested arrays", () => {
@@ -32,11 +37,11 @@ describe("parseOpenUiProgram", () => {
       )
     `);
 
-    expect(program.statements.get("overview")?.args[0]).toEqual([
+    expect(expectCall(program.statements.get("overview")).args[0]).toEqual([
       "Strings: f-strings, casefolding, join",
       "Lists: deque, comprehensions, slicing assignment",
     ]);
-    expect(program.statements.get("table")?.component).toBe("Table");
+    expect(expectCall(program.statements.get("table")).component).toBe("Table");
   });
 
   it("parses richer visual component arguments", () => {
@@ -48,9 +53,28 @@ describe("parseOpenUiProgram", () => {
       code = CodeBlock("python", "result = ''.join(chunks)")
     `);
 
-    expect(program.statements.get("hero")?.args[3]).toBe("violet");
-    expect(program.statements.get("tip")?.component).toBe("Callout");
-    expect(program.statements.get("code")?.args[1]).toBe("result = ''.join(chunks)");
+    expect(expectCall(program.statements.get("hero")).args[3]).toBe("violet");
+    expect(expectCall(program.statements.get("tip")).component).toBe("Callout");
+    expect(expectCall(program.statements.get("code")).args[1]).toBe("result = ''.join(chunks)");
+  });
+
+  it("parses reusable array aliases for component arguments", () => {
+    const program = parseOpenUiProgram(`
+      root = StudyUi("Python async", "Review async patterns.", [overview], cards, quizItems)
+      overview = Tab("Overview", [intro], "study", "blue")
+      intro = Text("Async code cooperatively waits at await points.")
+      cards = [c1, c2]
+      c1 = Flashcard("await", "Pauses the current coroutine.")
+      c2 = Flashcard("event loop", "Schedules coroutine progress.")
+      quizItems = [q1]
+      q1 = Quiz("What does async help most?", ["CPU loops", "I/O waiting"], "I/O waiting")
+    `);
+
+    expect(program.root.args[3]).toEqual({ type: "ref", name: "cards" });
+    expect(program.statements.get("cards")).toEqual([
+      { type: "ref", name: "c1" },
+      { type: "ref", name: "c2" },
+    ]);
   });
 
   it("rejects programs without root", () => {

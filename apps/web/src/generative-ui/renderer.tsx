@@ -6,36 +6,54 @@ import {
   GeneratedCallout,
   GeneratedCard,
   GeneratedCodeBlock,
+  GeneratedComparisonUi,
+  GeneratedDashboardUi,
   GeneratedFlashcard,
   GeneratedFlashcards,
   GeneratedHeroSummary,
+  GeneratedInspectorUi,
   GeneratedList,
   GeneratedMetric,
+  GeneratedPlannerUi,
   GeneratedProgress,
   GeneratedQuiz,
+  GeneratedReferenceUi,
+  GeneratedRunbookUi,
   GeneratedSourceStatus,
   GeneratedStack,
   GeneratedStandaloneIcon,
   GeneratedStatGrid,
   GeneratedStudyDeck,
+  GeneratedStudyUi,
   GeneratedTab,
   GeneratedTable,
   GeneratedTabs,
   GeneratedText,
   GeneratedTimeline,
   GeneratedTimelineItem,
-  GeneratedWeather,
   GeneratedWidget,
 } from "./components";
 import type { GeneratedComponentProps, RenderContext } from "./renderingTypes";
 import { keyForValue } from "./renderingUtils";
 
 export function renderChildren(value: OpenUiValue | undefined, context: RenderContext): ReactNode {
-  if (!Array.isArray(value)) {
+  const resolved =
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    value.type === "ref" &&
+    !context.seen.has(value.name)
+      ? context.program.statements.get(value.name)
+      : value;
+  if (!Array.isArray(resolved)) {
     return null;
   }
-  return value.map((entry, index) => (
-    <RenderValue key={keyForValue(entry, index)} value={entry} context={context} />
+  const nextContext =
+    value && typeof value === "object" && !Array.isArray(value) && value.type === "ref"
+      ? { ...context, seen: new Set([...context.seen, value.name]) }
+      : context;
+  return resolved.map((entry, index) => (
+    <RenderValue key={keyForValue(entry, index)} value={entry} context={nextContext} />
   ));
 }
 
@@ -56,12 +74,12 @@ export function RenderValue({ value, context }: { value: OpenUiValue; context: R
     if (context.seen.has(value.name)) {
       return null;
     }
-    const call = context.program.statements.get(value.name);
-    if (!call) {
+    const resolved = context.program.statements.get(value.name);
+    if (!resolved) {
       return null;
     }
     const nextContext = { ...context, seen: new Set([...context.seen, value.name]) };
-    return <RenderCall call={call} context={nextContext} />;
+    return <RenderValue value={resolved} context={nextContext} />;
   }
   return <RenderCall call={value} context={context} />;
 }
@@ -109,8 +127,6 @@ export function RenderCall({ call, context }: { call: OpenUiCall; context: Rende
       return <GeneratedFlashcard {...props} />;
     case "Quiz":
       return <GeneratedQuiz {...props} />;
-    case "Weather":
-      return <GeneratedWeather {...props} />;
     case "SourceStatus":
       return <GeneratedSourceStatus {...props} />;
     case "HeroSummary":
@@ -125,7 +141,36 @@ export function RenderCall({ call, context }: { call: OpenUiCall; context: Rende
       return <GeneratedProgress {...props} />;
     case "StudyDeck":
       return <GeneratedStudyDeck {...props} />;
+    case "ReferenceUi":
+    case "ReferenceGuide":
+      return <GeneratedReferenceUi {...props} />;
+    case "StudyUi":
+    case "StudyGuide":
+      return <GeneratedStudyUi {...props} />;
+    case "DashboardUi":
+    case "Dashboard":
+      return <GeneratedDashboardUi {...props} />;
+    case "RunbookUi":
+    case "Runbook":
+      return <GeneratedRunbookUi {...props} />;
+    case "ComparisonUi":
+    case "ComparisonGuide":
+      return <GeneratedComparisonUi {...props} />;
+    case "InspectorUi":
+    case "Inspector":
+      return <GeneratedInspectorUi {...props} />;
+    case "PlannerUi":
+    case "Planner":
+      return <GeneratedPlannerUi {...props} />;
     default:
-      return null;
+      return <UnknownOpenUiComponent component={call.component} />;
   }
+}
+
+function UnknownOpenUiComponent({ component }: { component: string }) {
+  return (
+    <div className="rounded-lg border border-border/70 bg-background/55 p-3 text-muted-foreground text-sm">
+      Unknown OpenUI component: <code className="text-foreground">{component}</code>
+    </div>
+  );
 }
