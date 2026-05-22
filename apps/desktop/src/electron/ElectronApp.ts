@@ -20,6 +20,12 @@ export interface ElectronAppShape {
   readonly quit: Effect.Effect<void>;
   readonly exit: (code: number) => Effect.Effect<void>;
   readonly relaunch: (options: Electron.RelaunchOptions) => Effect.Effect<void>;
+  readonly requestSingleInstanceLock: Effect.Effect<boolean>;
+  readonly setAsDefaultProtocolClient: (
+    scheme: string,
+    path?: string,
+    args?: readonly string[],
+  ) => Effect.Effect<void>;
   readonly setPath: (
     name: Parameters<Electron.App["setPath"]>[0],
     path: string,
@@ -76,6 +82,15 @@ const make = ElectronApp.of({
   relaunch: (options) =>
     Effect.sync(() => {
       Electron.app.relaunch(options);
+    }),
+  requestSingleInstanceLock: Effect.sync(() => Electron.app.requestSingleInstanceLock()),
+  setAsDefaultProtocolClient: (scheme, path, args) =>
+    Effect.sync(() => {
+      if (path !== undefined) {
+        Electron.app.setAsDefaultProtocolClient(scheme, path, [...(args ?? [])]);
+        return;
+      }
+      Electron.app.setAsDefaultProtocolClient(scheme);
     }),
   setPath: (name, path) =>
     Effect.sync(() => {

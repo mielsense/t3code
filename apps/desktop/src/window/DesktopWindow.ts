@@ -58,6 +58,7 @@ export interface DesktopWindowShape {
   readonly createMainIfBackendReady: Effect.Effect<void, DesktopWindowError>;
   readonly handleBackendReady: Effect.Effect<void, DesktopWindowError>;
   readonly dispatchMenuAction: (action: string) => Effect.Effect<void, DesktopWindowError>;
+  readonly openProjectPath: (projectPath: string) => Effect.Effect<void, DesktopWindowError>;
   readonly syncAppearance: Effect.Effect<void>;
 }
 
@@ -155,6 +156,7 @@ const make = Effect.gen(function* () {
   const state = yield* DesktopState.DesktopState;
   const context = yield* Effect.context<DesktopWindowRuntimeServices>();
   const runPromise = Effect.runPromiseWith(context);
+  const pendingProjectPaths = yield* Ref.make<readonly string[]>([]);
 
   const createWindow = Effect.fn("desktop.window.createWindow")(function* (
     backendHttpUrl: URL,
@@ -320,6 +322,30 @@ const make = Effect.gen(function* () {
     yield* createMain;
   }).pipe(Effect.withSpan("desktop.window.createMainIfBackendReady"));
 
+  const flushPendingProjectPaths = Effect.gen(function* () {
+    const backendReady = yield* Ref.get(state.backendReady);
+    if (!backendReady) return;
+
+    const projectPaths = yield* Ref.getAndSet(pendingProjectPaths, []);
+    if (projectPaths.length === 0) return;
+
+    const targetWindow = yield* ensureMain;
+    const send = () => {
+      if (targetWindow.isDestroyed()) return;
+      for (const projectPath of projectPaths) {
+        targetWindow.webContents.send(IpcChannels.OPEN_PROJECT_CHANNEL, projectPath);
+      }
+      void runPromise(electronWindow.reveal(targetWindow));
+    };
+
+    if (targetWindow.webContents.isLoadingMainFrame()) {
+      targetWindow.webContents.once("did-finish-load", send);
+      return;
+    }
+
+    send();
+  }).pipe(Effect.withSpan("desktop.window.flushPendingProjectPaths"));
+
   return DesktopWindow.of({
     createMain,
     ensureMain,
@@ -337,6 +363,7 @@ const make = Effect.gen(function* () {
       yield* Ref.set(state.backendReady, true);
       yield* logWindowInfo("backend ready", { source: "http" });
       yield* createMainIfBackendReady;
+      yield* flushPendingProjectPaths;
     }).pipe(Effect.withSpan("desktop.window.handleBackendReady")),
     dispatchMenuAction: Effect.fn("desktop.window.dispatchMenuAction")(function* (action) {
       yield* Effect.annotateCurrentSpan({ action });
@@ -355,6 +382,10 @@ const make = Effect.gen(function* () {
       }
 
       send();
+    }),
+    openProjectPath: Effect.fn("desktop.window.openProjectPath")(function* (projectPath) {
+      yield* Ref.update(pendingProjectPaths, (existing) => [...existing, projectPath]);
+      yield* flushPendingProjectPaths;
     }),
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;

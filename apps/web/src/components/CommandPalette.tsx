@@ -1172,6 +1172,17 @@ function OpenCommandPaletteDialog() {
     ],
   );
 
+  useEffect(() => {
+    const onOpenProjectPath = window.desktopBridge?.onOpenProjectPath;
+    if (typeof onOpenProjectPath !== "function") {
+      return;
+    }
+
+    return onOpenProjectPath((projectPath) => {
+      void handleAddProject(projectPath);
+    });
+  }, [handleAddProject]);
+
   function getDefaultCloneParentPath(environmentId: EnvironmentId): string {
     return getAddProjectInitialQueryForEnvironment(environmentId);
   }

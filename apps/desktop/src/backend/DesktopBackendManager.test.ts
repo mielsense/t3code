@@ -135,6 +135,7 @@ function makeManagerLayer(input: {
           activate: Effect.void,
           createMainIfBackendReady: Effect.void,
           handleBackendReady: Effect.void,
+          openProjectPath: () => Effect.void,
           dispatchMenuAction: () => Effect.void,
           syncAppearance: Effect.void,
           ...input.desktopWindow,

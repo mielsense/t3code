@@ -8,6 +8,7 @@ import * as NetService from "@t3tools/shared/Net";
 import packageJson from "../package.json" with { type: "json" };
 import { authCommand } from "./cli/auth.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
+import { openDesktopProjectFromCli } from "./cli/desktopOpen.ts";
 import { projectCommand } from "./cli/project.ts";
 import { runServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 
@@ -20,9 +21,11 @@ export const cli = Command.make("t3", { ...sharedServerCommandFlags }).pipe(
 );
 
 if (import.meta.main) {
-  Command.run(cli, { version: packageJson.version }).pipe(
-    Effect.scoped,
-    Effect.provide(CliRuntimeLayer),
-    NodeRuntime.runMain,
-  );
+  if (!openDesktopProjectFromCli(process.argv.slice(2))) {
+    Command.run(cli, { version: packageJson.version }).pipe(
+      Effect.scoped,
+      Effect.provide(CliRuntimeLayer),
+      NodeRuntime.runMain,
+    );
+  }
 }
